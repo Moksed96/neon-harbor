@@ -2,7 +2,7 @@
 
 [![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
 [![rank](https://make.fun/badge/gta6-01/Moksed96/neon-harbor/rank.svg)](https://make.fun/bounty/gta6-01)
-[![reward](https://make.fun/badge/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01)
+[![reward](https://make.fun/badge/gta6-01/Moksed96/neon-harbor/reward.svg)](https://make.fun/bounty/gta6-01)
 
 **Neon Harbor** is an original open-world crime game set in Port Delmar, a sun-soaked
 modern harbor city. You are **Rook Calloway**, a courier driver with a fast car, a faster
