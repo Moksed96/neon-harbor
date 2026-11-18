@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEON HARBOR — Open-World Crime</title>
+<style>
+  :root {
+    --ink: #f2ede4;
+    --muted: #9aa3ad;
+    --accent: #ff2e88;
+    --gold: #ffc233;
+    --teal: #19d3c5;
+    --panel: rgba(12, 16, 24, .78);
+    --hair: rgba(255,255,255,.14);
+    --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; color: var(--ink); font-family: var(--font-ui); }
+  #game, #game canvas { position: fixed; inset: 0; display: block; }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud[hidden] { display: none; }
+
+  /* minimap */
+  #minimap-wrap { position: fixed; top: 14px; left: 14px; width: 190px; height: 190px;
+    border: 2px solid var(--hair); border-radius: 50%; overflow: hidden;
+    background: rgba(10,14,20,.8); box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+  #minimap { width: 100%; height: 100%; display: block; }
+  #district { position: fixed; top: 212px; left: 22px; font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--ink); text-shadow: 0 1px 4px #000; }
+
+  /* top right: wanted + money */
+  #topright { position: fixed; top: 14px; right: 16px; text-align: right; }
+  #stars { font-size: 30px; letter-spacing: 4px; color: var(--gold); text-shadow: 0 0 10px rgba(255,194,51,.6), 0 2px 4px #000; line-height: 1; }
+  #stars .off { color: rgba(255,255,255,.22); text-shadow: none; }
+  #stars.hot { animation: pulse .5s infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.07); } }
+  #money { margin-top: 6px; font-family: var(--font-mono); font-size: 26px; color: #7dff9b; text-shadow: 0 2px 4px #000; }
+  #clock { font-family: var(--font-mono); font-size: 13px; color: var(--muted); text-shadow: 0 1px 3px #000; }
+
+  /* objective */
+  #objective { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); max-width: 520px;
+    background: var(--panel); border: 1px solid var(--hair); border-radius: 8px; padding: 10px 16px;
+    font-size: 15px; line-height: 1.35; box-shadow: 0 4px 16px rgba(0,0,0,.45); }
+  #objective .label { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--gold); font-family: var(--font-mono); }
+  #objective .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  #objective .timer { color: var(--accent); font-family: var(--font-mono); font-weight: 700; }
+
+  /* bottom left: health */
+  #vitals { position: fixed; left: 16px; bottom: 18px; width: 240px; }
+  #health-bar { height: 14px; border: 1px solid var(--hair); border-radius: 3px; background: rgba(0,0,0,.6); overflow: hidden; }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #2ee66b, #7dff9b); transition: width 150ms; }
+  #health-fill.low { background: linear-gradient(90deg, #e63b2e, #ff7a5c); }
+  #health-num { font-family: var(--font-mono); font-size: 13px; margin-top: 4px; text-shadow: 0 1px 3px #000; }
+  #weapon-line { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-top: 4px; text-shadow: 0 1px 3px #000; }
+
+  /* bottom right: speed */
+  #speedo { position: fixed; right: 18px; bottom: 18px; text-align: right; text-shadow: 0 2px 6px #000; }
+  #speed-num { font-family: var(--font-mono); font-size: 52px; line-height: 1; font-weight: 700; }
+  #speed-num small { font-size: 16px; color: var(--muted); }
+  #vehicle-name { font-size: 14px; color: var(--gold); letter-spacing: .08em; text-transform: uppercase; }
+
+  /* center messages */
+  #toast { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 180ms; pointer-events: none; }
+  #toast.on { opacity: 1; }
+  #toast h2 { margin: 0; font-size: 44px; letter-spacing: .02em; text-shadow: 0 3px 16px rgba(0,0,0,.7); }
+  #toast p { margin: 6px 0 0; font-size: 16px; color: var(--muted); text-shadow: 0 1px 6px #000; }
+  #toast.gold h2 { color: var(--gold); }
+  #toast.red h2 { color: #ff5c4d; }
+  #toast.teal h2 { color: var(--teal); }
+
+  #hint { position: fixed; left: 50%; bottom: 86px; transform: translateX(-50%); font-size: 13px;
+    color: var(--ink); background: var(--panel); border: 1px solid var(--hair); border-radius: 6px;
+    padding: 6px 12px; font-family: var(--font-mono); }
+  #hint[hidden] { display: none; }
+
+  #crosshair { position: fixed; left: 50%; top: 50%; width: 20px; height: 20px; transform: translate(-50%,-50%); display: none; }
+  #crosshair.on { display: block; }
+  #crosshair i { position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair i:nth-child(1) { left: 9px; top: 0; width: 2px; height: 6px; }
+  #crosshair i:nth-child(2) { left: 9px; bottom: 0; width: 2px; height: 6px; }
+  #crosshair i:nth-child(3) { top: 9px; left: 0; height: 2px; width: 6px; }
+  #crosshair i:nth-child(4) { top: 9px; right: 0; height: 2px; width: 6px; }
+
+  #damage { position: fixed; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(230,40,30,.55) 100%); transition: opacity 120ms; }
+
+  /* overlays */
+  .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; z-index: 10;
+    background: linear-gradient(180deg, rgba(8,10,18,.55), rgba(8,10,18,.88)); }
+  .overlay[hidden] { display: none; }
+  .panel { width: min(560px, 94vw); padding: 34px 36px; background: rgba(14,18,28,.92); border: 1px solid var(--hair);
+    border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .panel h1 { margin: 0; font-size: 46px; line-height: 1; letter-spacing: .02em; }
+  .panel h1 .neon { color: var(--accent); text-shadow: 0 0 22px rgba(255,46,136,.8); }
+  .panel h1 .harbor { color: var(--teal); text-shadow: 0 0 22px rgba(25,211,197,.7); }
+  .panel .tag { margin: 8px 0 0; color: var(--gold); font-family: var(--font-mono); font-size: 13px; letter-spacing: .22em; text-transform: uppercase; }
+  .panel p { color: var(--muted); line-height: 1.55; font-size: 15px; }
+  .panel p b { color: var(--ink); }
+  .btn { font: inherit; font-weight: 700; font-size: 16px; padding: 13px 22px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; margin-right: 10px; }
+  .btn:hover { filter: brightness(1.15); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--hair); }
+  .btn.ghost:hover { border-color: var(--ink); }
+  .keys { margin: 22px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 7px 18px; font-size: 13px; color: var(--muted); }
+  .keys kbd { padding: 2px 7px; border: 1px solid var(--hair); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; color: var(--ink); margin-right: 2px; }
+
+  #mission-list { margin: 14px 0 0; padding: 0; list-style: none; font-size: 14px; }
+  #mission-list li { padding: 7px 0; border-top: 1px solid var(--hair); display: flex; justify-content: space-between; gap: 12px; }
+  #mission-list li .st { font-family: var(--font-mono); font-size: 12px; }
+  #mission-list li .done { color: #7dff9b; }
+  #mission-list li .open { color: var(--gold); }
+  #mission-list li .locked { color: var(--muted); }
+
+  #dialog { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(560px, 92vw);
+    background: var(--panel); border: 1px solid var(--hair); border-left: 4px solid var(--gold); border-radius: 8px;
+    padding: 12px 16px; font-size: 15px; line-height: 1.45; z-index: 6; }
+  #dialog[hidden] { display: none; }
+  #dialog .who { color: var(--gold); font-weight: 700; font-family: var(--font-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+  #dialog .keys-hint { margin-top: 6px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
+  #wasted { background: rgba(0,0,0,.82); }
+  #wasted h1 { font-size: 64px; color: #ff5c4d; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="hud" hidden>
+  <div id="damage"></div>
+  <div id="minimap-wrap"><canvas id="minimap" width="380" height="380"></canvas></div>
+  <div id="district">Downtown</div>
+  <div id="topright">
+    <div id="stars"><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span></div>
+    <div id="money">$250</div>
+    <div id="clock">DAY 1 · 18:24</div>
+  </div>
+  <div id="objective"><div class="label">Free Roam</div><div class="text">Explore Neon Harbor. Steal a car, find work, stay out of trouble — or don't.</div><div class="sub"></div></div>
+  <div id="vitals">
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="health-num">100 HP</div>
+    <div id="weapon-line">FISTS · press E near a car to steal it</div>
+  </div>
+  <div id="speedo"><div id="speed-num">0 <small>MPH</small></div><div id="vehicle-name">ON FOOT</div></div>
+  <div id="toast"><h2></h2><p></p></div>
+  <div id="hint" hidden></div>
+  <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+</div>
+
+<div id="dialog" hidden>
+  <div class="who"></div>
+  <div class="text"></div>
+  <div class="keys-hint">ENTER — continue</div>
+</div>
+
+<div id="start" class="overlay">
+  <section class="panel" role="dialog" aria-modal="true">
+    <h1><span class="neon">NEON</span> <span class="harbor">HARBOR</span></h1>
+    <div class="tag">An open-world crime story · Port Delmar</div>
+    <p>You are <b>Rook Calloway</b>, a courier driver with a fast car, a faster mouth, and a debt
+    to the wrong people. The fixer <b>Marla Voss</b> has work for you — deliveries, getaways,
+    and one last job on the docks. Take the work, take the cars, take the city. Just don't
+    get caught.</p>
+    <button id="btn-new" class="btn" type="button">New Game</button>
+    <button id="btn-continue" class="btn ghost" type="button" hidden>Continue</button>
+    <button id="btn-how" class="btn ghost" type="button">How to Play</button>
+    <ul class="keys">
+      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move / Drive</li>
+      <li><kbd>Mouse</kbd> Look &nbsp; <kbd>Click</kbd> Shoot</li>
+      <li><kbd>E</kbd> Enter / Exit car</li>
+      <li><kbd>Space</kbd> Handbrake &nbsp; <kbd>Shift</kbd> Sprint / Boost</li>
+      <li><kbd>Q</kbd> Punch &nbsp; <kbd>R</kbd> Reload</li>
+      <li><kbd>P</kbd>/<kbd>Esc</kbd> Pause &nbsp; <kbd>M</kbd> Mute</li>
+      <li><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Missions &nbsp; <kbd>H</kbd> Horn</li>
+    </ul>
+  </section>
+</div>
+
+<div id="how" class="overlay" hidden>
+  <section class="panel" role="dialog" aria-modal="true">
+    <h1 style="font-size:32px">HOW TO PLAY</h1>
+    <p><b>On foot:</b> WASD to move, mouse to look, click to shoot your pistol, Q to punch.
+    Walk up to any parked or slow car and press <b>E</b> to steal it — but the cops notice.</p>
+    <p><b>Driving:</b> W accelerates, S brakes, A/D steer, Space handbrakes, Shift boosts.
+    Hit pedestrians or police and your wanted level climbs.</p>
+    <p><b>Wanted:</b> Stars in the top-right. Police chase you harder with each star.
+    Break line of sight and stay quiet to cool down. Get caught and you're BUSTED.</p>
+    <p><b>Missions:</b> Follow the gold marker. Press 1, 2 or 3 on the start screen to jump to a
+    mission briefing. Complete all three to finish the story — then keep the city.</p>
+    <p><b>Saving:</b> Progress saves automatically. Use Continue on the start screen.</p>
+    <button id="btn-how-back" class="btn" type="button">Back</button>
+  </section>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <section class="panel" role="dialog" aria-modal="true">
+    <h1 style="font-size:32px">PAUSED</h1>
+    <p>Neon Harbor waits for no one. Except right now.</p>
+    <button id="btn-resume" class="btn" type="button">Resume</button>
+    <button id="btn-quit" class="btn ghost" type="button">Save &amp; Quit to Menu</button>
+    <ul id="mission-list"></ul>
+  </section>
+</div>
+
+<div id="wasted" class="overlay" hidden>
+  <section class="panel" role="dialog" aria-modal="true" style="text-align:center">
+    <h1 id="wasted-title">WASTED</h1>
+    <p id="wasted-text">The harbor takes another one.</p>
+    <button id="btn-respawn" class="btn" type="button">Respawn — $200</button>
+  </section>
+</div>
+
+<div id="complete" class="overlay" hidden>
+  <section class="panel" role="dialog" aria-modal="true" style="text-align:center">
+    <h1 style="font-size:40px"><span class="neon">STORY</span> <span class="harbor">COMPLETE</span></h1>
+    <p id="complete-text">The harbor is yours, Rook.</p>
+    <button id="btn-freeroam" class="btn" type="button">Keep Playing — Free Roam</button>
+  </section>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
