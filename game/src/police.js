@@ -122,7 +122,7 @@ export class Police {
       // ram damage: touching the player's car or body
       if (dist < 3.4) {
         if (playerInCar) {
-          playerInCar.speed *= 0.85;
+          playerInCar.speed *= 0.94;
           playerInCar.health -= dt * 12;
         } else if (before > 8) {
           player.health -= dt * 30;

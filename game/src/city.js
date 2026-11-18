@@ -251,10 +251,10 @@ export function createCity(scene) {
   for (const c of streets) {
     for (let d = -160; d <= 160; d += 80) {
       const pole = new THREE.Mesh(lampGeo, mats.lamp);
-      pole.position.set(c + 8.5, 3, d);
+      pole.position.set(c + 8.5, 3, d + 8.5);
       group.add(pole);
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), mats.glow);
-      head.position.set(c + 8.5, 6.1, d);
+      head.position.set(c + 8.5, 6.1, d + 8.5);
       group.add(head);
     }
   }

@@ -45,11 +45,12 @@ const traffic = createTraffic(scene, city, 14);
 // parked cars to steal, scattered along street edges
 const parked = [];
 const parkedSpots = [
-  [-40, -8.5, Math.PI / 2, 'sedan'], [20, 31.5, -Math.PI / 2, 'sedan'],
-  [-80, 48.5, Math.PI / 2, 'taxi'], [60, -48.5, -Math.PI / 2, 'van'],
-  [100, 8.5, Math.PI / 2, 'sports'], [-120, -88.5, -Math.PI / 2, 'sedan'],
-  [40, 88.5, Math.PI / 2, 'truck'], [-60, 128.5, -Math.PI / 2, 'sedan'],
-  [140, -8.5, Math.PI / 2, 'sedan'],
+  // [x, z, heading, type] — each car sits on a street lane, facing along it
+  [-43.2, -60, 0, 'sedan'], [43.2, 20, Math.PI, 'taxi'],
+  [60, -83.2, Math.PI / 2, 'sports'], [-20, 83.2, -Math.PI / 2, 'van'],
+  [116.8, -20, 0, 'truck'], [-100, -116.8, Math.PI / 2, 'sedan'],
+  [-123.2, 60, Math.PI, 'sedan'], [100, 116.8, -Math.PI / 2, 'sedan'],
+  [163.2, 100, 0, 'sedan'],
 ];
 for (const [x, z, h, type] of parkedSpots) {
   const v = new Vehicle(scene, type, x, z, h);
@@ -57,7 +58,7 @@ for (const [x, z, h, type] of parkedSpots) {
   parked.push(v);
 }
 // mission 2 target car: cherry red Vortex GT outside the Delmar Grand
-const missionCar = new Vehicle(scene, 'sports', 20, -20, Math.PI / 2, 0xc2185b);
+const missionCar = new Vehicle(scene, 'sports', 20, -43.2, Math.PI / 2, 0xc2185b);
 missionCar.driver = null;
 missionCar.isMissionCar = true;
 parked.push(missionCar);
@@ -381,6 +382,7 @@ function refreshObjective() {
 function pauseGame() {
   if (state.mode !== 'playing') return;
   state.mode = 'paused';
+  document.exitPointerLock?.();
   const list = document.getElementById('mission-list');
   list.innerHTML = MISSIONS.map((m, i) => {
     const st = missions.completed[i] ? '<span class="st done">DONE</span>'
@@ -400,6 +402,7 @@ function resumeGame() {
 
 function endRun(kind) {
   state.mode = 'wasted';
+  document.exitPointerLock?.();
   document.getElementById('wasted-title').textContent = kind === 'busted' ? 'BUSTED' : 'WASTED';
   document.getElementById('wasted-text').textContent = kind === 'busted'
     ? 'The HPD hauled you in. Bail costs money — and time.'
@@ -515,7 +518,10 @@ function step(dt) {
           particles.burst(car.x, 1, car.z, 0xffc233, 14, 6, 4);
           car.health -= closing * 0.8;
           other.health -= closing * 0.8;
-          if (other.driver === 'police') police.addHeat(5, 'hit police car');
+          if (other.driver === 'police' && state.time - (car.lastPoliceHit || -99) > 2) {
+            police.addHeat(5, 'hit police car');
+            car.lastPoliceHit = state.time;
+          }
         }
         car.speed *= 0.7;
         other.speed *= 0.7;
@@ -563,7 +569,7 @@ function step(dt) {
   }
 
   // --- police ---
-  const pol = police.update(dt, player, !!player.inCar, () => endRun('busted'), null);
+  const pol = police.update(dt, player, player.inCar, () => endRun('busted'), null);
   if (pol.bustedProgress > 0) hud.hint(`Being arrested… ${Math.round(pol.bustedProgress * 100)}% — run!`);
 
   // --- missions ---
@@ -591,7 +597,7 @@ function step(dt) {
       hud.toast('Objective updated', ev.text, 'gold');
       refreshObjective();
     } else if (ev.type === 'wanted') {
-      police.addHeat(60, 'heist');
+      police.addHeat(50, 'heist');
     }
   }
 
@@ -714,8 +720,13 @@ function stageShot(name) {
   if (name === 'chase') {
     const car = placeInCar('sports', 0, 40, 0, 24);
     state.money = 1750;
-    police.addHeat(60, 'chase');
+    police.addHeat(50, 'chase');
     police.spawnCarNear(0, 40); police.spawnCarNear(0, 40); police.spawnCarNear(0, 40);
+    // one interceptor ahead, closing head-on so the chase reads in frame
+    const ahead = new Vehicle(scene, 'police', 3.2, 112, Math.PI);
+    ahead.driver = 'police';
+    ahead.speed = 8;
+    police.cars.push(ahead);
     missions.start(0);
     state.mode = 'playing';
     hud.setObjective('Mission 1 — FIRST DROP', 'Deliver the package to Pier 3 at the Marina', 'Time left: 212s');
@@ -725,7 +736,7 @@ function stageShot(name) {
     state.money = 1250;
     hud.setMoney(state.money);
   } else if (name === 'mission') {
-    placeInCar('sedan', -160, -40, Math.PI / 2, 10);
+    placeInCar('sedan', -120, -40, -Math.PI / 2, 10);
     missions.start(0);
     state.money = 750;
     hud.setMoney(state.money);
@@ -738,8 +749,13 @@ function stageShot(name) {
     police.spawnCopNear(20, 20);
     hud.setMoney(state.money);
   }
-  // simulate a short burst so traffic/police settle into frame, then freeze
-  for (let i = 0; i < 90; i++) step(1 / 60);
+  // simulate a short burst so traffic/police settle into frame, then freeze.
+  // hold the throttle so staged cars are actually moving in the shot.
+  if (name === 'chase' || name === 'driving' || name === 'mission') keys.KeyW = true;
+  // chase: fewer steps so the police are closing in but haven't rammed us to a stop
+  const steps = name === 'chase' ? 60 : 90;
+  for (let i = 0; i < steps; i++) step(1 / 60);
+  keys.KeyW = false;
   // a couple of visible action touches for the cover
   if (name === 'chase') {
     particles.burst(player.x + 4, 1, player.z + 4, 0xffc233, 18, 6, 4);
